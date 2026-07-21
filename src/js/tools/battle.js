@@ -240,7 +240,6 @@ var battle = execMain(function() {
 	var battleHistory = loadBattleHistory();
 	var historyDiv;
 	var resultOverlay;
-	var resultOverlayTid = 0;
 	var clearedThroughRound = {};
 
 	function loadBattleHistory() {
@@ -389,8 +388,6 @@ var battle = execMain(function() {
 	}
 
 	function hideResultOverlay() {
-		clearTimeout(resultOverlayTid);
-		resultOverlayTid = 0;
 		resultOverlay && resultOverlay.hide();
 	}
 
@@ -406,12 +403,11 @@ var battle = execMain(function() {
 		resultOverlay.hide().removeClass('battle-result-win battle-result-loss battle-result-draw').empty();
 		resultOverlay.append(
 			$('<div class="battle-result-label">').text(record['result']),
-			$('<div class="battle-result-detail">').text('You ' + prettyBattleTime(record['localTime']) + ' | ' + opponentTimes.join(' | '))
+			$('<div class="battle-result-detail">').text('You ' + prettyBattleTime(record['localTime']) + ' | ' + opponentTimes.join(' | ')),
+			$('<div class="battle-result-dismiss">').text('Press any key or click to continue')
 		);
 		resultOverlay[0].offsetWidth;
 		resultOverlay.addClass('battle-result-' + record['result'].toLowerCase()).css('display', 'flex');
-		clearTimeout(resultOverlayTid);
-		resultOverlayTid = setTimeout(hideResultOverlay, 3000);
 	}
 
 	function processCompletedRound() {
@@ -716,11 +712,15 @@ var battle = execMain(function() {
 		roomTable = $('<table class="table">');
 		historyDiv = $('<div class="battle-history">');
 		resultOverlay = $('<div class="battle-result-overlay">').hide().click(hideResultOverlay).appendTo('body');
-		$(document).keydown(function(event) {
-			if (event.keyCode == 27 && resultOverlay.is(':visible')) {
-				hideResultOverlay();
+		document.addEventListener('keydown', function(event) {
+			if (!resultOverlay.is(':visible')) {
+				return;
 			}
-		});
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			hideResultOverlay();
+		}, true);
 		tools.regTool('battle', TOOLS_BATTLE, execFunc);
 		kernel.regListener('battle', 'timestd', procSignal);
 		kernel.regListener('battle', 'timepnt', procSignal);

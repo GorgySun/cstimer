@@ -532,7 +532,8 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 }
 
 .battle-result-label,
-.battle-result-detail {
+.battle-result-detail,
+.battle-result-dismiss {
 	position: relative;
 	z-index: 1;
 }
@@ -553,6 +554,12 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 	font-weight: 700;
 	margin-top: 0.25rem;
 	padding: 0 1rem;
+}
+
+.battle-result-dismiss {
+	font-family: Arial, sans-serif;
+	font-size: clamp(0.8rem, 2vw, 1.1rem);
+	opacity: 0.72;
 }
 
 @keyframes battle-result-in {
