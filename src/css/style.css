@@ -483,6 +483,9 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	box-sizing: border-box;
+	padding: 3vh 3vw;
+	gap: 0.5rem;
 	text-align: center;
 	color: #fff;
 	background: rgba(0, 0, 0, 0.84);
@@ -505,25 +508,27 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 
 .battle-result-overlay::before {
 	content: '';
-	position: absolute;
-	inset: -0.5rem;
+	display: block;
+	flex: 0 1 auto;
+	width: min(84vw, 58rem);
+	height: min(52vh, 30rem);
 	background-position: center;
 	background-repeat: no-repeat;
-	opacity: 0.24;
-	filter: blur(3px) contrast(0.82) saturate(0.65);
-	mix-blend-mode: luminosity;
+	background-size: contain;
+	opacity: 0.48;
 	pointer-events: none;
-	transform: scale(1.03);
 }
 
 .battle-result-loss::before {
 	background-image: url('../images/battle-loss.png');
-	background-size: cover;
 }
 
 .battle-result-win::before {
 	background-image: url('../images/battle-win.png');
-	background-size: contain;
+}
+
+.battle-result-draw::before {
+	display: none;
 }
 
 .battle-result-label,
@@ -534,10 +539,11 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 
 .battle-result-label {
 	font-family: Arial, sans-serif;
-	font-size: clamp(5rem, 24vw, 16rem);
+	font-size: clamp(3.5rem, 13vw, 9rem);
 	font-weight: 900;
 	line-height: 0.9;
 	letter-spacing: 0.04em;
+	margin-top: 0.25rem;
 	text-shadow: 0 0.05em 0 rgba(0, 0, 0, 0.35), 0 0 0.2em rgba(255, 255, 255, 0.25);
 }
 
@@ -545,7 +551,7 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 	font-family: Arial, sans-serif;
 	font-size: clamp(1rem, 4vw, 2.4rem);
 	font-weight: 700;
-	margin-top: 1.2rem;
+	margin-top: 0.25rem;
 	padding: 0 1rem;
 }
 
