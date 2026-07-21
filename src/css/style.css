@@ -488,6 +488,7 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 	background: rgba(0, 0, 0, 0.84);
 	cursor: pointer;
 	animation: battle-result-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
+	overflow: hidden;
 }
 
 .battle-result-win {
@@ -500,6 +501,35 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 
 .battle-result-draw {
 	background: radial-gradient(circle, rgba(212, 155, 22, 0.88), rgba(45, 30, 0, 0.96));
+}
+
+.battle-result-overlay::before {
+	content: '';
+	position: absolute;
+	inset: -0.5rem;
+	background-position: center;
+	background-repeat: no-repeat;
+	opacity: 0.24;
+	filter: blur(3px) contrast(0.82) saturate(0.65);
+	mix-blend-mode: luminosity;
+	pointer-events: none;
+	transform: scale(1.03);
+}
+
+.battle-result-loss::before {
+	background-image: url('../images/battle-loss.png');
+	background-size: cover;
+}
+
+.battle-result-win::before {
+	background-image: url('../images/battle-win.png');
+	background-size: contain;
+}
+
+.battle-result-label,
+.battle-result-detail {
+	position: relative;
+	z-index: 1;
 }
 
 .battle-result-label {
