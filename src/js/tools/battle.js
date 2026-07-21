@@ -140,6 +140,7 @@ var battle = execMain(function() {
 				return;
 			}
 			roomId = val;
+			delete clearedThroughRound[roomId];
 		}
 		if (!conn.isConnected()) {
 			conn.connect().then(joinRoom.bind(null, false));
@@ -234,6 +235,273 @@ var battle = execMain(function() {
 	var toStart = false;
 	var localLastSolve = [[-1, 1], null];
 
+	var HISTORY_KEY = 'battleHistoryV1';
+	var HISTORY_LIMIT = 100;
+	var battleHistory = loadBattleHistory();
+	var historyDiv;
+	var resultOverlay;
+	var resultOverlayTid = 0;
+	var clearedThroughRound = {};
+
+	function loadBattleHistory() {
+		try {
+			var history = JSON.parse(localStorage[HISTORY_KEY] || '[]');
+			if (!$.isArray(history)) {
+				return [];
+			}
+			return history.filter(function(record) {
+				return record && /^(?:WIN|LOSS|DRAW)$/.test(record['result']) && $.isArray(record['opponents']);
+			}).slice(0, HISTORY_LIMIT);
+		} catch (e) {
+			return [];
+		}
+	}
+
+	function saveBattleHistory() {
+		try {
+			localStorage[HISTORY_KEY] = JSON.stringify(battleHistory.slice(0, HISTORY_LIMIT));
+		} catch (e) {
+			DEBUG && console.log('[battle] unable to save history', e);
+		}
+	}
+
+	function accountName(accountId) {
+		accountId = String(accountId || 'Unknown');
+		if (accountId.indexOf('|') != -1) {
+			return accountId.split('|')[1];
+		}
+		if (accountId.length > 10) {
+			return accountId.slice(0, 4) + '...' + accountId.slice(accountId.length - 3);
+		}
+		return accountId;
+	}
+
+	function isLocalAccount(accountId) {
+		if (!compId || !accountId) {
+			return false;
+		}
+		if (accountId == compId) {
+			return true;
+		}
+		return /^[0-9a-f]{32}$/i.test(compId) && accountId.indexOf(compId.slice(0, 12) + '|') == 0;
+	}
+
+	function timeValue(time) {
+		if (!$.isArray(time) || time.length < 2 || time[0] == -1) {
+			return Infinity;
+		}
+		return (+time[0] || 0) + (+time[1] || 0);
+	}
+
+	function prettyBattleTime(time) {
+		return $.isArray(time) ? stats.pretty(time, true) : 'N/A';
+	}
+
+	function countRecord(localAccountId, accountId) {
+		var ret = { wins: 0, losses: 0, draws: 0 };
+		for (var i = 0; i < battleHistory.length; i++) {
+			var record = battleHistory[i];
+			if (record['localAccountId'] != localAccountId) {
+				continue;
+			}
+			var result = null;
+			if (accountId == localAccountId) {
+				result = record['result'];
+			} else {
+				for (var j = 0; j < record['opponents'].length; j++) {
+					var opponent = record['opponents'][j];
+					if (opponent['accountId'] == accountId) {
+						result = opponent['result'] == 'WIN' ? 'LOSS' : opponent['result'] == 'LOSS' ? 'WIN' : 'DRAW';
+						break;
+					}
+				}
+			}
+			if (result == 'WIN') {
+				ret.wins++;
+			} else if (result == 'LOSS') {
+				ret.losses++;
+			} else if (result == 'DRAW') {
+				ret.draws++;
+			}
+		}
+		return ret;
+	}
+
+	function recordText(localAccountId, accountId) {
+		var record = countRecord(localAccountId, accountId);
+		return record.wins + 'W-' + record.losses + 'L-' + record.draws + 'D';
+	}
+
+	function renderHistory() {
+		if (!historyDiv) {
+			return;
+		}
+		historyDiv.empty();
+		var total = { wins: 0, losses: 0, draws: 0 };
+		for (var i = 0; i < battleHistory.length; i++) {
+			var result = battleHistory[i]['result'];
+			total[result == 'WIN' ? 'wins' : result == 'LOSS' ? 'losses' : 'draws']++;
+		}
+		var clear = $('<span class="click battle-history-clear">').text('Clear').click(function() {
+			if (!confirm('Clear all online battle records?')) {
+				return;
+			}
+			battleHistory = [];
+			localStorage.removeItem(HISTORY_KEY);
+			if (roomInfo && roomInfo['last'] && roomInfo['last'][0] >= 0) {
+				clearedThroughRound[roomInfo['roomId']] = roomInfo['last'][0];
+			}
+			renderRoom();
+		});
+		historyDiv.append($('<div class="battle-history-title">').append(
+			$('<b>').text('Battle record: ' + total.wins + 'W-' + total.losses + 'L-' + total.draws + 'D'),
+			' ', clear
+		));
+		if (!battleHistory.length) {
+			historyDiv.append($('<div class="battle-history-empty">').text('No completed battles recorded yet.'));
+			return;
+		}
+		var list = $('<div class="battle-history-list">');
+		for (var i = 0; i < Math.min(10, battleHistory.length); i++) {
+			var record = battleHistory[i];
+			var opponentNames = [];
+			var opponentTimes = [];
+			for (var j = 0; j < record['opponents'].length; j++) {
+				var opponent = record['opponents'][j];
+				opponentNames.push(opponent['name']);
+				opponentTimes.push(opponent['name'] + ' ' + prettyBattleTime(opponent['time']));
+			}
+			var item = $('<div class="battle-history-item">').addClass('battle-history-' + record['result'].toLowerCase());
+			item.append($('<div>').append(
+				$('<b>').text(record['result']),
+				$('<span>').text(' vs ' + opponentNames.join(', '))
+			));
+			item.append($('<div class="battle-history-times">').text(
+				'You ' + prettyBattleTime(record['localTime']) + ' | ' + opponentTimes.join(' | ')
+			));
+			item.append($('<div class="battle-history-meta">').text(new Date(record['finishedAt']).toLocaleString()));
+			if (record['scramble']) {
+				item.append($('<div class="battle-history-scramble">').text(record['scramble']));
+			}
+			list.append(item);
+		}
+		historyDiv.append(list);
+	}
+
+	function hideResultOverlay() {
+		clearTimeout(resultOverlayTid);
+		resultOverlayTid = 0;
+		resultOverlay && resultOverlay.hide();
+	}
+
+	function showResultOverlay(record) {
+		if (!resultOverlay) {
+			return;
+		}
+		var opponentTimes = [];
+		for (var i = 0; i < record['opponents'].length; i++) {
+			var opponent = record['opponents'][i];
+			opponentTimes.push(opponent['name'] + ' ' + prettyBattleTime(opponent['time']));
+		}
+		resultOverlay.hide().removeClass('battle-result-win battle-result-loss battle-result-draw').empty();
+		resultOverlay.append(
+			$('<div class="battle-result-label">').text(record['result']),
+			$('<div class="battle-result-detail">').text('You ' + prettyBattleTime(record['localTime']) + ' | ' + opponentTimes.join(' | '))
+		);
+		resultOverlay[0].offsetWidth;
+		resultOverlay.addClass('battle-result-' + record['result'].toLowerCase()).css('display', 'flex');
+		clearTimeout(resultOverlayTid);
+		resultOverlayTid = setTimeout(hideResultOverlay, 3000);
+	}
+
+	function processCompletedRound() {
+		if (!roomInfo || !roomInfo['last'] || roomInfo['last'][0] < 0) {
+			return;
+		}
+		var solveId = roomInfo['last'][0];
+		if (roomInfo['roomId'] in clearedThroughRound && clearedThroughRound[roomInfo['roomId']] >= solveId) {
+			return;
+		}
+		var players = roomInfo['players'] || [];
+		var solveMap = {};
+		for (var i = 0; i < roomInfo['solves'].length; i++) {
+			var solve = roomInfo['solves'][i];
+			if (solve['solveId'] == solveId) {
+				solveMap[solve['accountId']] = solve;
+			}
+		}
+		var localAccountId = null;
+		for (var i = 0; i < players.length; i++) {
+			if (!solveMap[players[i]['accountId']]) {
+				return;
+			}
+			if (isLocalAccount(players[i]['accountId'])) {
+				localAccountId = players[i]['accountId'];
+			}
+		}
+		if (!localAccountId || players.length < 2) {
+			return;
+		}
+		var localSolve = solveMap[localAccountId];
+		var localValue = timeValue(localSolve['time']);
+		var opponents = [];
+		var overallResult = 'WIN';
+		var finishedAt = +localSolve['soltime'] || +new Date();
+		for (var i = 0; i < players.length; i++) {
+			var accountId = players[i]['accountId'];
+			if (accountId == localAccountId) {
+				continue;
+			}
+			var opponentSolve = solveMap[accountId];
+			var opponentValue = timeValue(opponentSolve['time']);
+			var result = localValue < opponentValue ? 'WIN' : localValue > opponentValue ? 'LOSS' : 'DRAW';
+			if (result == 'LOSS') {
+				overallResult = 'LOSS';
+			} else if (result == 'DRAW' && overallResult != 'LOSS') {
+				overallResult = 'DRAW';
+			}
+			finishedAt = Math.max(finishedAt, +opponentSolve['soltime'] || 0);
+			opponents.push({
+				'accountId': accountId,
+				'name': accountName(accountId),
+				'time': opponentSolve['time'].slice(0),
+				'result': result
+			});
+		}
+		var opponentKey = opponents.map(function(opponent) { return opponent['accountId']; }).sort().join('|');
+		var existing = -1;
+		for (var i = 0; i < battleHistory.length; i++) {
+			var record = battleHistory[i];
+			var recordOpponentKey = record['opponents'].map(function(opponent) { return opponent['accountId']; }).sort().join('|');
+			if (record['roomId'] == roomInfo['roomId'] && record['solveId'] == solveId && record['localAccountId'] == localAccountId &&
+				recordOpponentKey == opponentKey && Math.abs(record['finishedAt'] - finishedAt) < 600000) {
+				existing = i;
+				break;
+			}
+		}
+		var completed = {
+			'roomId': roomInfo['roomId'],
+			'solveId': solveId,
+			'localAccountId': localAccountId,
+			'result': overallResult,
+			'localTime': localSolve['time'].slice(0),
+			'opponents': opponents,
+			'scramble': roomInfo['last'][1] || '',
+			'finishedAt': finishedAt
+		};
+		if (existing != -1) {
+			battleHistory[existing] = completed;
+			saveBattleHistory();
+			renderHistory();
+			return;
+		}
+		battleHistory.unshift(completed);
+		battleHistory = battleHistory.slice(0, HISTORY_LIMIT);
+		saveBattleHistory();
+		renderHistory();
+		showResultOverlay(completed);
+	}
+
 	function onNotify(event, obj) {
 		if (event == 'msg') {
 			if ('roomInfo' in obj) {
@@ -262,6 +530,7 @@ var battle = execMain(function() {
 				kernel.setProp('scrType', 'remoteBattle');
 			}
 		}
+		processCompletedRound();
 	}
 
 	var roomTable;
@@ -275,7 +544,7 @@ var battle = execMain(function() {
 		}
 		roomTable.empty();
 		var titles = TOOLS_BATTLE_TITLE.split('|').slice(0, 3);
-		titles.splice(1, 0, 'ELO');
+		titles.splice(1, 0, 'Record');
 
 		roomTable.append($('<tr>').append($('<td colspan=5>').append(headStr[0] + ': ', joinRoomSpan, '&nbsp;', leaveRoomSpan)));
 		roomTable.append('<tr><td colspan=2>' + titles.join('</td><td>') + '</td></tr>');
@@ -302,32 +571,43 @@ var battle = execMain(function() {
 					hasSolved = true;
 				}
 			}
+			var localAccountId = null;
+			for (var i = 0; i < players.length; i++) {
+				if (isLocalAccount(players[i]['accountId'])) {
+					localAccountId = players[i]['accountId'];
+				}
+			}
 			players.sort(function(a, b) {
 				return b['elo'] - a['elo'];
 			});
 			var curSolveId = roomInfo['cur'][0];
 			for (var i = 0; i < players.length; i++) {
 				var player = players[i];
-				var account = player['accountId'];
-				if (account.indexOf('|') != -1) {
-					account = '<b>' + account.split('|')[1] + '</b>';
-				} else if (account.length > 10) {
-					account = account.slice(0, 4) + '...' + account.slice(account.length - 3);
-				}
+				var account = accountName(player['accountId']);
 				var curTime = (solveDict[player['accountId']] || {})[curSolveId];
 				var isSolved = player['status'] == 'SOLVED';
 				var lastTime = (solveDict[player['accountId']] || {})[curSolveId - 1];
 				lastTime = isSolved ? curTime : lastTime;
 				lastTime = lastTime ? stats.pretty(lastTime[0], true) : 'N/A';
 				if (hasSolved && !isSolved) {
-					lastTime = '<span style="color:#888">' + lastTime + '</span>';
+					lastTime = $('<span>').css('color', '#888').text(lastTime);
 				}
-				roomTable.append('<tr><td>' + (i + 1) + '</td><td>' + account +
-					'</td><td>' + player['elo'] +
-					'</td><td>' + statusMap[['READY', 'INSPECT', 'SOLVING', 'SOLVED', 'LOSS'].indexOf(player['status']) + 1] +
-					'</td><td>' + lastTime + '</td></tr>');
+				var accountCell = $('<td>');
+				if (player['accountId'].indexOf('|') != -1) {
+					accountCell.append($('<b>').text(account));
+				} else {
+					accountCell.text(account);
+				}
+				roomTable.append($('<tr>').append(
+					$('<td>').text(i + 1),
+					accountCell,
+					$('<td>').text(localAccountId ? recordText(localAccountId, player['accountId']) : '0W-0L-0D'),
+					$('<td>').text(statusMap[['READY', 'INSPECT', 'SOLVING', 'SOLVED', 'LOSS'].indexOf(player['status']) + 1]),
+					$('<td>').append(lastTime)
+				));
 			}
 		}
+		renderHistory();
 	}
 
 	function updateAccountDiv() {
@@ -379,7 +659,7 @@ var battle = execMain(function() {
 			return;
 		}
 		fdiv.empty().append($('<div style="font-size: 0.75em; text-align: center;">')
-			.append(accountDiv, roomTable));
+			.append(accountDiv, roomTable, historyDiv));
 		updateAccountDiv();
 		renderRoom();
 		isInit = true;
@@ -434,6 +714,13 @@ var battle = execMain(function() {
 
 	$(function() {
 		roomTable = $('<table class="table">');
+		historyDiv = $('<div class="battle-history">');
+		resultOverlay = $('<div class="battle-result-overlay">').hide().click(hideResultOverlay).appendTo('body');
+		$(document).keydown(function(event) {
+			if (event.keyCode == 27 && resultOverlay.is(':visible')) {
+				hideResultOverlay();
+			}
+		});
 		tools.regTool('battle', TOOLS_BATTLE, execFunc);
 		kernel.regListener('battle', 'timestd', procSignal);
 		kernel.regListener('battle', 'timepnt', procSignal);

@@ -415,6 +415,121 @@ html:not(.m) .mywindow:hover, html:not(.m) #leftbar:hover {
 	border-bottom-right-radius: 2rem;
 }
 
+.battle-history {
+	margin-top: 0.6rem;
+	text-align: left;
+}
+
+.battle-history-title {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.25rem 0;
+}
+
+.battle-history-clear {
+	font-size: 0.85em;
+}
+
+.battle-history-empty {
+	opacity: 0.65;
+	padding: 0.35rem 0;
+}
+
+.battle-history-list {
+	max-height: 13rem;
+	overflow-y: auto;
+}
+
+.battle-history-item {
+	border-left: 0.3rem solid #888;
+	padding: 0.35rem 0.45rem;
+	margin: 0.25rem 0;
+	background: rgba(127, 127, 127, 0.1);
+}
+
+.battle-history-win {
+	border-left-color: #18a558;
+}
+
+.battle-history-loss {
+	border-left-color: #d83232;
+}
+
+.battle-history-draw {
+	border-left-color: #d49b16;
+}
+
+.battle-history-times,
+.battle-history-meta,
+.battle-history-scramble {
+	font-size: 0.82em;
+}
+
+.battle-history-meta {
+	opacity: 0.65;
+}
+
+.battle-history-scramble {
+	overflow-wrap: anywhere;
+	opacity: 0.75;
+}
+
+.battle-result-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	color: #fff;
+	background: rgba(0, 0, 0, 0.84);
+	cursor: pointer;
+	animation: battle-result-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.battle-result-win {
+	background: radial-gradient(circle, rgba(24, 165, 88, 0.88), rgba(0, 30, 12, 0.96));
+}
+
+.battle-result-loss {
+	background: radial-gradient(circle, rgba(216, 50, 50, 0.88), rgba(45, 0, 0, 0.96));
+}
+
+.battle-result-draw {
+	background: radial-gradient(circle, rgba(212, 155, 22, 0.88), rgba(45, 30, 0, 0.96));
+}
+
+.battle-result-label {
+	font-family: Arial, sans-serif;
+	font-size: clamp(5rem, 24vw, 16rem);
+	font-weight: 900;
+	line-height: 0.9;
+	letter-spacing: 0.04em;
+	text-shadow: 0 0.05em 0 rgba(0, 0, 0, 0.35), 0 0 0.2em rgba(255, 255, 255, 0.25);
+}
+
+.battle-result-detail {
+	font-family: Arial, sans-serif;
+	font-size: clamp(1rem, 4vw, 2.4rem);
+	font-weight: 700;
+	margin-top: 1.2rem;
+	padding: 0 1rem;
+}
+
+@keyframes battle-result-in {
+	from { opacity: 0; transform: scale(1.18); }
+	to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.battle-result-overlay {
+		animation: none;
+	}
+}
+
 #gray {
 	z-index: 50;
 	position: fixed;

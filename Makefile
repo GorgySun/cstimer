@@ -77,8 +77,6 @@ tools/bluetoothutil.js \
 tools/metronome.js \
 tools/onlinecomp.js \
 tools/battle.js \
-tools/p2pconn.js \
-tools/p2pbattle.js \
 tools/syncseed.js \
 tools/bldhelper.js \
 twisty/twistyreplay.js \
