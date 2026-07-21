@@ -76,6 +76,8 @@
   <script type="text/javascript" src="js/tools/metronome.js"></script>
   <script type="text/javascript" src="js/tools/onlinecomp.js"></script>
   <script type="text/javascript" src="js/tools/battle.js"></script>
+  <script type="text/javascript" src="js/tools/p2pconn.js"></script>
+  <script type="text/javascript" src="js/tools/p2pbattle.js"></script>
   <script type="text/javascript" src="js/tools/syncseed.js"></script>
   <script type="text/javascript" src="js/tools/bldhelper.js"></script>
   <script type="text/javascript" src="js/twisty/twistyreplay.js"></script>

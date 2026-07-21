@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>csTimer P2P connection self-test</title>
+	<style>
+		body { font-family: sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; }
+		button { font-size: 1rem; padding: 0.5rem 1rem; }
+		.pass { color: #087a23; }
+		.fail { color: #b00020; }
+		.info { color: #555; }
+		#log { white-space: pre-wrap; border: 1px solid #aaa; padding: 1rem; min-height: 12rem; }
+	</style>
+</head>
+<body>
+	<h1>csTimer P2P connection self-test</h1>
+	<p>This creates host and guest peers in one browser page, round-trips the manual signaling payloads, opens both data channels, exchanges control/chat messages, and closes the guest.</p>
+	<button id="run">Run self-test</button>
+	<pre id="log"></pre>
+	<script src="../src/js/lib/lzstring.js"></script>
+	<script src="../src/js/tools/p2pconn.js"></script>
+	<script>
+	(function() {
+		'use strict';
+		var log = document.getElementById('log');
+		var run = document.getElementById('run');
+		var host = null;
+		var guest = null;
+
+		function line(text, cls) {
+			var span = document.createElement('span');
+			span.className = cls || 'info';
+			span.textContent = text + '\n';
+			log.appendChild(span);
+		}
+
+		function deferred() {
+			var ret = {};
+			ret.promise = new Promise(function(resolve, reject) {
+				ret.resolve = resolve;
+				ret.reject = reject;
+			});
+			return ret;
+		}
+
+		function timeout(promise, ms, label) {
+			return Promise.race([
+				promise,
+				new Promise(function(resolve, reject) {
+					setTimeout(function() { reject(new Error('Timeout: ' + label)); }, ms);
+				})
+			]);
+		}
+
+		function assert(condition, message) {
+			if (!condition) {
+				throw new Error(message);
+			}
+			line('PASS  ' + message, 'pass');
+		}
+
+		run.addEventListener('click', function() {
+			run.disabled = true;
+			log.textContent = '';
+			var hostConnected = deferred();
+			var guestConnected = deferred();
+			var controlReceived = deferred();
+			var hostChatReceived = deferred();
+			var guestHostChatReceived = deferred();
+			var guestOwnChatReceived = deferred();
+			var hostClosed = deferred();
+
+			var hostCallbacks = {
+				onState: function(state) {
+					line('host state: ' + state);
+					if (state == 'CONNECTED') { hostConnected.resolve(); }
+					if (state == 'CLOSED') { hostClosed.resolve(); }
+				},
+				onError: function(err) { line('host error: ' + (err.code || err.message), 'fail'); },
+				onDiagnostic: function(code, detail) { line('host diag: ' + code + (detail ? ' ' + detail : '')); },
+				onControl: function(message) {
+					if (message && message.probe == 'control-ok') { controlReceived.resolve(); }
+				},
+				onChat: function(message) {
+					if (message.sender == 'guest' && message.text == '<guest & safe>') { hostChatReceived.resolve(); }
+				}
+			};
+			var guestCallbacks = {
+				onState: function(state) {
+					line('guest state: ' + state);
+					if (state == 'CONNECTED') { guestConnected.resolve(); }
+				},
+				onError: function(err) { line('guest error: ' + (err.code || err.message), 'fail'); },
+				onDiagnostic: function(code, detail) { line('guest diag: ' + code + (detail ? ' ' + detail : '')); },
+				onControl: function() {},
+				onChat: function(message) {
+					if (message.sender == 'host' && message.text == 'hello from host') { guestHostChatReceived.resolve(); }
+					if (message.sender == 'guest' && message.text == '<guest & safe>') { guestOwnChatReceived.resolve(); }
+				}
+			};
+
+			line('Creating host offer...');
+			p2pconn.createHost(hostCallbacks).then(function(createdHost) {
+				host = createdHost;
+				var offer = host.getOfferCode();
+				var parsedOffer = p2pconn.parseSignal(offer, 'offer');
+				assert(parsedOffer.sessionId == host.sessionId, 'offer codec preserves session ID');
+				line('Creating guest answer...');
+				return p2pconn.createGuest(offer, guestCallbacks);
+			}).then(function(result) {
+				guest = result.session;
+				var parsedAnswer = p2pconn.parseSignal(result.answerCode, 'answer');
+				assert(parsedAnswer.sessionId == host.sessionId, 'answer codec preserves session ID');
+				return host.acceptAnswer(result.answerCode);
+			}).then(function() {
+				return timeout(Promise.all([hostConnected.promise, guestConnected.promise]), 35000, 'data channels open');
+			}).then(function() {
+				assert(host.control.label == p2pconn.constants.controlLabel && guest.control.label == p2pconn.constants.controlLabel, 'control channel opens on both peers');
+				assert(host.chat.label == p2pconn.constants.chatLabel && guest.chat.label == p2pconn.constants.chatLabel, 'chat channel opens on both peers');
+				guest.sendControl({ probe: 'control-ok' });
+				return timeout(controlReceived.promise, 3000, 'control message');
+			}).then(function() {
+				assert(true, 'control message reaches host');
+				host.sendChat('hello from host');
+				guest.sendChat('<guest & safe>');
+				return timeout(Promise.all([hostChatReceived.promise, guestHostChatReceived.promise, guestOwnChatReceived.promise]), 3000, 'chat messages');
+			}).then(function() {
+				assert(true, 'canonical chat messages reach both peers');
+				guest.close('SELF_TEST_CLOSE');
+				return timeout(hostClosed.promise, 3000, 'remote close');
+			}).then(function() {
+				assert(true, 'closing guest closes host session');
+				line('SELF-TEST PASSED', 'pass');
+			}).catch(function(err) {
+				line('SELF-TEST FAILED: ' + (err.code || err.message || err), 'fail');
+			}).then(function() {
+				if (guest && !guest.closed) { guest.close('SELF_TEST_CLEANUP'); }
+				if (host && !host.closed) { host.close('SELF_TEST_CLEANUP'); }
+				run.disabled = false;
+			});
+		});
+	})();
+	</script>
+</body>
+</html>
